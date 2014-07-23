@@ -1,0 +1,1055 @@
+This [[http://orgmode.org/][Org-Mode]] document contains my emacs configuration. It uses
+org-babel to keep a litterate programming setup. 
+
+It is loaded from init.el.
+* Initialization
+This section contains all the loading functions.
+** Load paths
+  #+name: my-emacs-load-paths
+  #+begin_src emacs-lisp
+    (add-to-list 'load-path my-emacs-dir)
+    (setq package-user-dir (concat my-emacs-dir "elpa"))
+  #+end_src
+
+** El-get
+- Initialize el-get
+#+BEGIN_SRC emacs-lisp
+  (add-to-list 'load-path "~/.emacs.d/el-get/el-get")
+  
+  (unless (require 'el-get nil 'noerror)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.github.com/dimitri/el-get/master/el-get-install.el")
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+#+END_SRC
+
+- Packages
+  #+BEGIN_SRC emacs-lisp
+        (require 'package)
+        (setq package-archives '(("gnu" . "http://elpa.gnu.org/packages/")
+                                 ("marmalade" . "http://marmalade-repo.org/packages/")
+                                 ("melpa" . "http://melpa.milkbox.net/packages/")))
+        (package-initialize)
+    (setq el-get-sources
+     '((:name color-theme-sanityinc-tomorrow
+              :description "Two pleasant medium-contrast Emacs color themes in light and dark flavours"
+              :type github
+              :pkgname "purcell/color-theme-sanityinc-tomorrow"
+              :depends color-theme
+              :prepare (add-to-list 'custom-theme-load-path default-directory))))
+        (defvar viel:el-get-packages
+          (append
+          '(smex
+            undo-tree
+            auctex
+            evil
+            helm
+            haskell-mode
+            yasnippet
+            python
+            sr-speedbar
+            lua-mode
+            magit
+            yaml-mode
+            powerline
+            projectile
+            switch-window
+            ace-jump-mode
+            ein
+            web-mode
+            evil-surround
+            ido-vertical-mode
+            color-theme-sanityinc-tomorrow)
+          (mapcar 'el-get-source-name el-get-sources)))
+        
+        (el-get 'sync viel:el-get-packages) 
+  #+END_SRC
+
+** Handle OSX PATH bug
+  #+begin_src emacs-lisp
+    (let (osx-paths)
+      (dolist (path '("/Users/vaiter/.cabal/bin" "/Users/vaiter/Library/Enthought/Canopy_64bit/User/bin" "/usr/texbin/" "/usr/local/bin" "/opt/local/bin" "/opt/local/sbin" "$HOME/bin")
+                    (setenv "PATH" (concat osx-paths (getenv "PATH"))))
+        (push path exec-path)
+        (setq osx-paths (concat (concat path ":") osx-paths))))
+  #+end_src
+
+* My defuns
+
+- Wait after `k` to handle `kj` 
+from http://zuttobenkyou.wordpress.com/2011/02/15/some-thoughts-on-emacs-and-vim/
+  #+begin_src emacs-lisp
+    (require 'evil)
+    (evil-define-command cofi/maybe-exit ()
+      :repeat change
+      (interactive)
+      (let ((modified (buffer-modified-p)))
+        (insert "k")
+        (let ((evt (read-event (format "Insert %c to exit insert state" ?j)
+                   nil 0.5)))
+          (cond
+           ((null evt) (message ""))
+           ((and (integerp evt) (char-equal evt ?j))
+        (delete-char -1)
+        (set-buffer-modified-p modified)
+        (push 'escape unread-command-events))
+           (t (setq unread-command-events (append unread-command-events
+                              (list evt))))))))
+  #+end_src
+
+- Rotate window helper
+  #+BEGIN_SRC emacs-lisp
+     (defun rotate-windows ()
+       "Rotate your windows" (interactive) (cond ((not (> (count-windows) 1)) (message "You can't rotate a single window!"))
+    (t
+     (setq i 1)
+     (setq numWindows (count-windows))
+     (while  (< i numWindows)
+       (let* (
+              (w1 (elt (window-list) i))
+              (w2 (elt (window-list) (+ (% i numWindows) 1)))
+              (b1 (window-buffer w1))
+              (b2 (window-buffer w2))
+              (s1 (window-start w1))
+              (s2 (window-start w2))
+              )
+         (set-window-buffer w1  b2)
+         (set-window-buffer w2 b1)
+         (set-window-start w1 s2)
+         (set-window-start w2 s1)
+         (setq i (1+ i)))))))
+  #+END_SRC
+
+- Switch to previous buffer
+  #+BEGIN_SRC emacs-lisp
+    (defun switch-to-previous-buffer ()
+      "Switch to previously open buffer.
+    Repeated invocations toggle between the two most recently open buffers."
+      (interactive)
+      (switch-to-buffer (other-buffer (current-buffer) 1)))
+  #+END_SRC
+   
+* General environments settings
+
+** Smex
+- Smex is a M-x enhancement for Emacs.
+  #+begin_src emacs-lisp
+    (require 'smex)
+  #+end_src
+
+-  Use Smex for recent M-x commands a la ido.
+  #+begin_src emacs-lisp
+    (smex-initialize)
+  #+end_src
+
+** Windmove and Switch-window
+- To navigate buffers with S-arrows
+  #+begin_src emacs-lisp
+    (require 'windmove)
+    (windmove-default-keybindings)
+  #+end_src
+
+- And to have a visual choice
+  #+BEGIN_SRC emacs-lisp
+    (require 'switch-window)
+  #+END_SRC
+
+** Ido
+- Initialize ido
+  #+begin_src emacs-lisp
+    (require 'ido)  
+  #+end_src
+
+- Use vertical ido
+  #+BEGIN_SRC emacs-lisp
+    (require 'ido-vertical-mode)
+    (ido-mode 1)
+    (ido-vertical-mode 1)
+  #+END_SRC
+
+- Fuzzy matching
+  #+begin_src emacs-lisp
+    (setq ido-enable-flex-matching t)
+  #+end_src
+
+- Don't look in other directories (no merging)
+  #+begin_src emacs-lisp
+    (setq ido-auto-merge-work-directories-length nil)
+  #+end_src
+
+- Don't ask for throw-away buffer creation
+  #+begin_src emacs-lisp
+    (setq ido-create-new-buffer 'always)
+  #+end_src
+
+- Guess context
+  #+begin_src emacs-lisp
+    (setq ido-use-filename-at-point 'guess)
+  #+end_src
+
+- Completion of filenames everywhere
+  #+begin_src emacs-lisp
+    (setq ido-everywhere t)
+  #+end_src
+
+- Display order
+  #+begin_src emacs-lisp
+    (setq ido-file-extensions-order '(".org" ".tex" ".py" ".el" ".rb"))
+  #+end_src
+
+- Activate Ido
+  #+begin_src emacs-lisp
+    (ido-mode 1)
+  #+end_src
+  
+** Uniquify
+- Init Uniquify
+  #+begin_src enacs-lisp
+   (require 'uniquify)
+  #+end_src
+
+- Style: "Makefile|source"
+  #+begin_src emacs-lisp
+   (setq uniquify-buffer-name-style 'reverse)
+   (setq uniquify-separator "|")
+  #+end_src
+
+- Rename buffer names after killing one
+  #+begin_src emacs-lisp
+   (setq uniquify-after-kill-buffer-p t)
+  #+end_src
+
+- Ignore if no ambiguity
+  #+begin_src emacs-lisp
+   (setq uniquify-ignore-buffers-re "^\\*")
+  #+end_src
+
+** General
+
+- No startup splash screen.
+  #+begin_src emacs-lisp
+    (setq inhibit-startup-message t)
+  #+end_src
+
+- Add directory info to distinguish buffers.
+  #+begin_src emacs-lisp
+    (setq uniquify-buffer-name-style 'forward)
+  #+end_src
+
+- Don't make me type out 'yes' and 'no'
+  #+begin_src emacs-lisp
+    (fset 'yes-or-no-p 'y-or-n-p)
+  #+end_src
+
+- Autorevert all buffers.
+  #+begin_src emacs-lisp
+    (global-auto-revert-mode t)
+  #+end_src
+
+- Search case sensitive
+  #+begin_src emacs-lisp
+    (setq case-fold-search t)
+  #+end_src
+
+- Put backups and autosaves in temp dir.
+  #+begin_src emacs-lisp
+    (setq backup-directory-alist
+          `((".*" . ,temporary-file-directory)))
+    (setq auto-save-file-name-transforms
+          `((".*" ,temporary-file-directory t)))
+  #+end_src
+
+- Options to consider
+  #+begin_src emacs-lisp
+    ;; (put 'ido-complete 'disabled nil)
+    ;; (put 'ido-exit-minibuffer 'disabled nil)
+    ;; (put 'dired-find-alternate-file 'disabled nil)
+    ;; (put 'autopair-newline 'disabled nil)
+    ;; (put 'upcase-region 'disabled nil)
+    ;; (put 'downcase-region 'disabled nil)
+    ;; (put 'narrow-to-region 'disabled nil)
+  #+end_src
+
+** Editing
+
+- UTF-8 ALL THE THINGS !
+  #+begin_src emacs-lisp
+    (prefer-coding-system 'utf-8)
+    (set-language-environment 'utf-8)
+    (set-default-coding-systems 'utf-8)
+    (set-terminal-coding-system 'utf-8)
+    (set-selection-coding-system 'utf-8)
+  #+end_src
+
+- No hard tabs
+  #+begin_src emacs-lisp
+    (setq-default indent-tabs-mode nil)   ;; don't use tabs to indent
+    (setq-default tab-width 8)            ;; but maintain correct appearance    
+  #+end_src
+
+- Apply syntax highlighting to all buffers
+  #+begin_src emacs-lisp
+    (global-font-lock-mode 1)
+  #+end_src
+
+- Highest level of fontification
+  #+begin_src emacs-lisp
+    (setq font-lock-maximum-decoration t)
+  #+end_src
+
+- Match ( and ) without any delay
+  #+begin_src emacs-lisp
+    (show-paren-mode 1)
+    (setq show-paren-delay 0)
+  #+end_src
+
+- Auto match bracket-like
+  #+begin_src emacs-lisp
+    (electric-pair-mode t)
+  #+end_src
+
+- delete the selection with a keypress
+  #+begin_src emacs-lisp
+    (delete-selection-mode t)
+  #+end_src
+
+- Define reload-my-emacs
+  #+begin_src emacs-lisp
+    (defun reload-my-emacs ()
+      (interactive)
+      (load-file "~/.emacs.d/init.el"))
+  #+end_src
+
+** Persistant registers
+Registers are obtained through C-x r j KEY
+- my-emacs.org -> e
+  #+begin_src emacs-lisp
+    (set-register ?e (cons 'file "~/.emacs.d/my-emacs.org"))
+  #+end_src
+
+- links.org -> l
+  #+BEGIN_SRC emacs-lisp
+    (set-register ?l (cons 'file "~/Dropbox/Org/links.org"))
+  #+END_SRC
+
+* Look
+
+** General
+
+- Less flickery display
+  #+begin_src emacs-lisp
+    (setq redisplay-dont-pause t)
+  #+end_src
+
+- Where am I ?
+  #+begin_src emacs-lisp
+    (line-number-mode 1)
+    (column-number-mode 1)
+  #+end_src
+
+- Always show line number
+  #+begin_src emacs-lisp
+    (require 'linum)
+    (setq linum-disabled-modes-list '(eshell-mode
+                                      wl-summary-mode
+                                      compilation-mode
+                                      dired-mode
+                                      speedbar-mode
+                                      mu4e-main-mode
+                                      mu4e-about-mode
+                                      mu4e-view-mode
+                                      mu4e-headers-mode
+                                      doc-view-mode))
+    (defun linum-on ()
+      (unless (or (minibufferp) (member major-mode linum-disabled-modes-list)
+                (and (not (eq (buffer-name) "*scratch*")) 
+                 (string-match "*" (buffer-name))))
+        (linum-mode 1)))
+    (global-linum-mode 1)
+    (setq linum-eager nil)
+  #+end_src
+
+- No anoying bip nor flashing
+  #+begin_src emacs-lisp
+    (setq ring-bell-function 'ignore)
+  #+end_src
+
+- No GUI
+  #+begin_src emacs-lisp
+    (when (display-graphic-p)
+      (setq use-file-dialog nil)
+      (setq use-dialog-box nil)
+      (mouse-wheel-mode t))
+  #+end_src
+
+- No clutter
+  #+BEGIN_SRC emacs-lisp
+    (if (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
+    (if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
+    (if (fboundp 'menu-bar-mode) (menu-bar-mode -1))
+  #+END_SRC
+
+- Highlight current line
+  #+BEGIN_SRC emacs-lisp
+    (global-hl-line-mode 1)
+  #+END_SRC
+
+** Fonts
+- Define fonts to use for the GUI
+  #+begin_src emacs-lisp
+    (when (display-graphic-p)
+      (set-face-font 'default "Monaco-12")
+      (set-face-font 'variable-pitch "Monaco-12")
+      (set-face-font 'fixed-pitch "Monaco-12"))
+    ;; Handle issue with emacsclient
+    ;; (add-to-list 'default-frame-alist '(font . "Inconsolata-11"))
+  #+end_src
+  
+** Theme
+- Color Theme everywhere
+  #+begin_src emacs-lisp
+    (setq color-theme-is-global t)
+  #+end_src
+
+- Default theme
+  #+BEGIN_SRC emacs-lisp
+    (require 'color-theme-sanityinc-tomorrow)
+    (setq sv/current-theme 'sanityinc-tomorrow-night)
+    (setq sv/themes '(sanityinc-tomorrow-night
+                      sanityinc-tomorrow-blue
+                      sanityinc-tomorrow-day
+                      sanityinc-tomorrow-bright
+                      sanityinc-tomorrow-eighties))
+  #+END_SRC
+
+- Theme switcher helper
+  #+BEGIN_SRC emacs-lisp
+    (defun sv/enable-theme (theme)
+      (if sv/current-theme (disable-theme sv/current-theme))
+      (setq sv/current-theme theme)
+      (load-theme theme t))
+
+    (defun sv/rotate-left (a-list)
+      (append (cdr a-list) (list (car a-list))))
+
+    (defun sv/cycle-themes ()
+      (interactive)
+      (setq sv/themes (append (cdr sv/themes) (list (car sv/themes))))
+      (sv/enable-theme (car sv/themes)))
+
+    (sv/enable-theme sv/current-theme)
+  #+END_SRC
+    
+* General Mode
+
+** Undo Tree
+- undo-tree for linear branches
+  #+begin_src emacs-lisp
+;;    (require 'undo-tree)
+  #+end_src
+
+** Evil
+- Init evil
+  #+begin_src emacs-lisp
+    (require 'evil)
+    (evil-mode 1)
+  #+end_src
+
+- Map `kj` as ESC key
+  #+begin_src emacs-lisp
+    (define-key evil-insert-state-map "k" #'cofi/maybe-exit)
+  #+end_src
+
+- Default behavior of >> and << to 2 spaces
+  #+begin_src emacs-lisp
+    (setq evil-shift-width 2)     
+  #+end_src
+
+- Use evil-surrond
+  #+BEGIN_SRC emacs-lisp
+    (require 'evil-surround)
+    (global-evil-surround-mode 1)
+  #+END_SRC
+
+- State mode in some major modes
+  #+BEGIN_SRC emacs-lisp
+    (loop for (mode . state) in '((inferior-emacs-lisp-mode . emacs)
+                                  (pylookup-mode . emacs)
+                                  (comint-mode . emacs)
+                                  (shell-mode . emacs)
+                                  (term-mode . emacs)
+                                  (bc-menu-mode . emacs)
+                                  (magit-branch-manager-mode-map . emacs)
+                                  (rdictcc-buffer-mode . emacs)
+                                  (ebib-entry-mode . emacs)
+                                  (ebib-index-mode . emacs)
+                                  (ebib-log-mode . emacs))
+          do (evil-set-initial-state mode state))
+  #+END_SRC
+
+- Don't overwrite cursor color
+  #+BEGIN_SRC emacs-lisp
+    (setq evil-default-cursor t) 
+  #+END_SRC
+  
+** Auto-complete
+- Init auto-complete
+  #+begin_src emacs-lisp
+    (require 'auto-complete-config)
+    (ac-config-default)
+  #+end_src
+
+** Yasnippet
+- Init yas
+  #+begin_src emacs-lisp
+        (require 'yasnippet)
+        (yas/global-mode 1)
+        (define-key yas-minor-mode-map [(tab)] nil)
+        ;; (yas/load-directory "~/.emacs.d/snippets/")
+        
+        ;; (add-hook 'LaTeX-mode-hook
+        ;;           '(lambda()
+        ;;              (local-set-key [tab] 'yas/expand)))
+        
+  #+end_src
+
+** AceJump
+
+- Load AceJump
+  #+BEGIN_SRC emacs-lisp
+    (require 'ace-jump-mode)
+  #+END_SRC
+
+** Flyspell
+
+- Use aspell
+  #+BEGIN_SRC emacs-lisp
+   (setq ispell-program-name "aspell")
+   (setq ispell-list-command "--list")
+  #+END_SRC
+ 
+** Powerline
+
+- Require powerline
+  #+BEGIN_SRC emacs-lisp
+   ;; (require 'powerline)
+   ;; (setq powerline-arrow-shape 'curve)
+  #+END_SRC
+ 
+** Projectile
+
+- Basic conf
+  #+BEGIN_SRC emacs-lisp
+;;    (projectile-global-mode)
+  #+END_SRC
+
+** Helm
+
+- Basic conf
+  #+BEGIN_SRC emacs-lisp
+    (require 'helm-config)
+  #+END_SRC
+  
+* Lang Mode
+** Haskell
+- Init
+  #+BEGIN_SRC emacs-lisp
+    (require 'haskell-mode-autoloads)
+  #+END_SRC
+
+- Doc mode
+  #+begin_src emacs-lisp
+    (add-hook 'haskell-mode-hook 'turn-on-haskell-doc-mode)
+  #+end_src
+
+- Indent
+  #+begin_src emacs-lisp
+    (add-hook 'haskell-mode-hook 'turn-on-haskell-indentation)
+  #+end_src
+
+- Minor Interactive
+  #+BEGIN_SRC emacs-lisp
+    (add-hook 'haskell-mode-hook 'interactive-haskell-mode)
+    (eval-after-load "haskell-mode"
+      '(progn
+        (define-key haskell-mode-map (kbd "C-x C-d") nil)
+        (define-key haskell-mode-map (kbd "C-c C-z") 'haskell-interactive-switch)
+        (define-key haskell-mode-map (kbd "C-c C-l") 'haskell-process-load-file)
+        (define-key haskell-mode-map (kbd "C-c C-b") 'haskell-interactive-switch)
+        (define-key haskell-mode-map (kbd "C-c C-t") 'haskell-process-do-type)
+        (define-key haskell-mode-map (kbd "C-c C-i") 'haskell-process-do-info)
+        (define-key haskell-mode-map (kbd "C-c M-.") nil)
+        (define-key haskell-mode-map (kbd "C-c C-d") nil)))
+  #+END_SRC
+
+  #+RESULTS:
+
+- Fake PureScript mode
+  #+BEGIN_SRC emacs-lisp
+    (define-derived-mode purescript-mode haskell-mode "PureScript"
+      "Major mode for PureScript")
+    (add-to-list 'auto-mode-alist (cons "\\.purs\\'" 'purescript-mode))
+  #+END_SRC
+** LaTeX
+
+- Use auctex
+  #+BEGIN_SRC emacs-lisp
+    (load "auctex.el" nil t t)
+  #+END_SRC
+
+- Use pdflatex
+  #+begin_src emacs-lisp
+    (setq TeX-PDF-mode t)
+  #+end_src
+
+- Enable parse on save
+  #+begin_src emacs-lisp
+    (setq TeX-auto-save t)
+  #+end_src
+
+- Enable parse on load
+  #+begin_src emacs-lisp
+    (setq TeX-parse-self t)
+  #+end_src
+
+- Don't autofill !
+  #+begin_src emacs-lisp
+    (add-hook 'LaTeX-mode-hook 'visual-line-mode)
+  #+end_src
+
+- Spell checking
+  #+begin_src emacs-lisp
+    (add-hook 'LaTeX-mode-hook 'flyspell-mode)
+  #+end_src
+
+- Faster math typo
+  #+begin_src emacs-lisp
+    (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
+  #+end_src
+
+- Use reftex !
+  #+begin_src emacs-lisp
+    (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
+    (setq reftex-plug-into-AUCTeX t)
+  #+end_src
+
+- Don't ask to save
+  #+begin_src emacs-lisp
+    (setq TeX-save-query nil)
+  #+end_src
+
+- Tex-Master ask
+  #+begin_src emacs-lisp
+    (setq TeX-master nil)
+  #+end_src
+
+- Use latexmk
+SyncTeX is setup via ~/.latexmkrc
+  #+begin_src emacs-lisp
+    ;; Use Skim as viewer, enable source <-> PDF sync
+    ;; make latexmk available via C-c C-c
+    ;; Note: SyncTeX is setup via ~/.latexmkrc (see below)
+    (add-hook 'LaTeX-mode-hook (lambda ()
+      (push
+        '("latexmk" "latexmk -pdf %s" TeX-run-TeX nil t
+          :help "Run latexmk on file")
+        TeX-command-list)))
+    (add-hook 'TeX-mode-hook '(lambda () (setq TeX-command-default "latexmk")))
+     
+    ;; use Skim as default pdf viewer
+    ;; Skim's displayline is used for forward search (from .tex to .pdf)
+    ;; option -b highlights the current line; option -g opens Skim in the background  
+    (setq TeX-view-program-selection '((output-pdf "PDF Viewer")))
+    (setq TeX-view-program-list
+         '(("PDF Viewer" "~/Applications/Skim.app/Contents/SharedSupport/displayline -b -g %n %o %b")))
+  #+end_src
+
+** Python
+- Use Gallina python mode
+  #+begin_src emacs-lisp
+    (require 'python)
+  #+end_src
+- Auto indent new line
+  #+begin_src emacs-lisp
+    (add-hook 'python-mode-hook
+      #'(lambda ()
+          (define-key python-mode-map "\C-m" 'newline-and-indent)))
+  #+end_src
+- Activate Jedi
+  #+begin_src emacs-lisp
+    (autoload 'jedi:setup "jedi" nil t)
+    (add-hook 'python-mode-hook 'jedi:setup)
+    (setq jedi:setup-keys t)
+    (setq jedi:complete-on-dot t) 
+  #+end_src
+- Activate EIN
+  #+BEGIN_SRC emacs-lisp
+    (require 'ein)
+  #+END_SRC
+  
+** Web-mode
+  #+BEGIN_SRC emacs-lisp
+    (require 'web-mode)
+    (add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.tpl\\.php\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.jsp\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.as[cp]x\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.djhtml\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
+    
+    (defun web-mode-hook ()
+      "Hooks for Web mode."
+      (setq web-mode-markup-indent-offset 2)
+      (setq web-mode-css-indent-offset 2)
+      (setq web-mode-code-indent-offset 2)
+      (setq web-mode-indent-style 2)
+      (setq web-mode-disable-auto-pairing t)
+      (setq web-mode-disable-css-colorization t)
+    )
+    
+    (add-hook 'web-mode-hook 'web-mode-hook)
+  #+END_SRC
+
+** Scala
+- Ensime init
+  #+BEGIN_SRC emacs-lisp
+;;    (require 'ensime)
+;;    (add-hook 'scala-mode-hook 'ensime-scala-mode-hook)
+  #+END_SRC
+
+* Utils Mode
+** mu4e (mail)
+
+- Initialize mu4e
+  #+BEGIN_SRC emacs-lisp
+    (require 'mu4e)
+    
+    ;; default
+    (setq mu4e-maildir (expand-file-name "/Users/vaiter/Maildir"))
+    
+    (setq mu4e-drafts-folder "/[Gmail].Drafts")
+    (setq mu4e-sent-folder   "/[Gmail].Sent Mail")
+    (setq mu4e-trash-folder  "/[Gmail].Trash")
+    
+    ;; don't save message to Sent Messages, GMail/IMAP will take care of this
+    (setq mu4e-sent-messages-behavior 'delete)
+    
+    ;; allow for updating mail using 'U' in the main view:
+    (setq mu4e-get-mail-command "offlineimap")
+    (setq mu4e-update-interval 420)
+  #+END_SRC
+
+- Viewing image inline
+  #+BEGIN_SRC emacs-lisp
+    ;; enable inline images
+    (setq mu4e-view-show-images t)
+    ;; use imagemagick, if available
+    (when (fboundp 'imagemagick-register-types)
+       (imagemagick-register-types))
+  #+END_SRC
+
+-- Don't reply to myself
+  #+BEGIN_SRC emacs-lisp
+    (setq mu4e-compose-dont-reply-to-self t)
+  #+END_SRC
+
+- Shortcuts
+  #+BEGIN_SRC emacs-lisp
+    (setq mu4e-maildir-shortcuts
+          '(("/INBOX"             . ?i)
+            ("/[Gmail].Sent Mail" . ?s)
+            ("/[Gmail].Trash"     . ?t)))
+  #+END_SRC
+
+- Perso
+  #+BEGIN_SRC emacs-lisp
+    (setq
+     user-mail-address "samuel.vaiter@gmail.com"
+     user-full-name  "Samuel VAITER")
+  #+END_SRC
+  
+- Signature
+  #+BEGIN_SRC emacs-lisp
+    (setq message-signature
+          (concat
+           "Samuel Vaiter\n"
+           "Ph. D. student at CNRS, Ceremade, Univ. Paris-Dauphine,\n"
+           "Place du Maréchal De Lattre De Tassigny,\n"
+           "75775 Paris Cedex 16 - FRANCE.\n"
+           "\n"
+           "Email: samuel.vaiter@gmail.com\n"
+           "Web: http://samuelvaiter.com"))
+    (setq mu4e-compose-signature message-signature)
+  #+END_SRC
+
+- SMPT config with SSL
+  #+begin_src emacs-lisp
+    (require 'smtpmail)
+    
+    (setq message-send-mail-function 'smtpmail-send-it
+          smtpmail-stream-type 'ssl
+          smtpmail-auth-credentials
+          '(("smtp.gmail.com" 465 "samuel.vaiter@gmail.com" nil))
+          smtpmail-default-smtp-server "smtp.gmail.com"
+          smtpmail-smtp-server "smtp.gmail.com"
+          smtpmail-smtp-service 465)
+  #+end_src
+
+- Be compatible with mu4e
+  #+BEGIN_SRC emacs-lisp
+    (eval-after-load 'mu4e
+      '(progn
+         ;; use the standard bindings as a base
+         (evil-make-overriding-map mu4e-view-mode-map 'normal t)
+         (evil-make-overriding-map mu4e-main-mode-map 'normal t)
+         (evil-make-overriding-map mu4e-headers-mode-map 'normal t)
+         
+         (evil-add-hjkl-bindings mu4e-view-mode-map 'normal
+           "J" 'mu4e~headers-jump-to-maildir
+           "j" 'evil-next-line
+           "C" 'mu4e-compose-new
+           "o" 'mu4e-view-message
+           "Q" 'mu4e-raw-view-quit-buffer)
+         
+         (evil-add-hjkl-bindings mu4e-headers-mode-map 'normal
+           "J" 'mu4e~headers-jump-to-maildir
+           "j" 'evil-next-line
+           "C" 'mu4e-compose-new
+           "o" 'mu4e-view-message
+           )
+         
+         (evil-add-hjkl-bindings mu4e-main-mode-map 'normal
+           "J" 'mu4e~headers-jump-to-maildir
+           "j" 'evil-next-line
+           "RET" 'mu4e-view-message)
+         ))
+  #+END_SRC
+
+- Custom headers
+  #+BEGIN_SRC emacs-lisp
+    (setq mu4e-headers-date-format "%x %R")
+    (setq mu4e-headers-fields
+          '( (:date       .  14)
+             (:flags      .   6)
+             (:from-or-to .  22)
+             (:subject    .  nil)))
+  #+END_SRC
+
+- Use html2text
+  #+BEGIN_SRC emacs-lisp
+    (setq mu4e-html2text-command "html2text -utf8 -width 72")
+  #+END_SRC
+
+** Multi-term
+- Initialization
+  #+BEGIN_SRC emacs-lisp
+    ;(require 'multi-term)
+    ;(setq multi-term-program "/usr/local/bin/zsh")
+    ;(setq system-uses-terminfo nil)
+  #+END_SRC
+
+- No autopair in term
+  #+BEGIN_SRC emacs-lisp
+    ;(add-hook 'term-mode-hook
+    ;  #'(lambda () (setq autopair-dont-activate t)))
+  #+END_SRC
+
+** Doc-View mode
+- Auto reload on modif
+  #+BEGIN_SRC emacs-lisp
+    (add-hook 'doc-view-mode-hook 'auto-revert-mode)
+  #+END_SRC
+  
+** Ebib
+- Init ebib
+  #+BEGIN_SRC emacs-lisp
+    (setq ebib-preload-bib-search-dirs "~/Dropbox/Work/papers/all.bib")
+  #+END_SRC
+
+* Keybindings
+
+** Perspectives
+
+Perspectives are opened with C-c p(erspective) + one char.
+
+- Org-mode (link,agenda,buffer)
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key "\C-cpl" 'org-store-link)
+    (global-set-key "\C-cpa" 'org-agenda)
+    (global-set-key "\C-cpb" 'org-iswitchb)
+  #+END_SRC
+
+** Others
+
+- Find file with C-x f
+  #+begin_src emacs-lisp
+    (global-set-key (kbd "C-x f") 'find-file-at-point) ;; Remove set the fill-column
+  #+end_src
+
+- Toggle speedbar with s-]
+  #+begin_src emacs-lisp
+    (global-set-key (kbd "s-]") 'sr-speedbar-toggle)
+  #+end_src
+
+- M-x without it (C-x C-m)
+  #+begin_src emacs-lisp
+    (global-set-key "\C-x\C-m" 'execute-extended-command)
+  #+end_src
+
+- Ace Jump with SPC
+  #+BEGIN_SRC emacs-lisp
+    (define-key global-map (kbd "C-c SPC") 'ace-jump-mode)
+    (define-key evil-normal-state-map (kbd "SPC") 'ace-jump-mode)
+  #+END_SRC
+
+- Org-mode capture
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key (kbd "C-M-r") 'org-capture)  
+  #+END_SRC
+
+- Rotate windows
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key (kbd "C-c r") 'rotate-windows)
+  #+END_SRC
+
+- Switch theme
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key (kbd "C-c §") 'sv/cycle-themes)
+  #+END_SRC
+
+- Yasnippet expand
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key (kbd "C-c y e") 'yas-expand)
+    (global-set-key (kbd "C-c y i") 'yas-insert-snippet)
+  #+END_SRC
+
+- Switch to previous buffer with C-c b
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key (kbd "C-c b") 'switch-to-previous-buffer)
+  #+END_SRC
+
+** Fx keys
+
+- F1 is bind to apropos and S-F1 to describe-key
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key [f1] 'apropos-command)
+    (global-set-key [S-f1] 'describe-key)
+  #+END_SRC
+
+- F2 comments the current region and S-F2 uncomments it
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key [f2] 'comment-region)
+    (global-set-key [S-f2] 'uncomment-region)
+  #+END_SRC
+
+- F3 switch to next term, S-F3 creates a new term window
+  #+BEGIN_SRC emacs-lisp
+    ;(global-set-key [f3] 'multi-term-next)
+    ;(global-set-key [S-f3] 'multi-term)
+  #+END_SRC 
+
+- F4 launches Helm
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key [f4] 'helm-mini)
+  #+END_SRC
+
+- F5 launches magit
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key [f5] 'magit-status)
+  #+END_SRC
+
+- F8 for spelling
+  #+BEGIN_SRC emacs-lisp
+    ;; easy spell check
+    (global-set-key (kbd "<f8>") 'ispell-word)
+    (global-set-key (kbd "C-S-<f8>") 'flyspell-mode)
+    (global-set-key (kbd "C-M-<f8>") 'flyspell-buffer)
+    (global-set-key (kbd "C-<f8>") 'flyspell-check-previous-highlighted-word)
+    (defun flyspell-check-next-highlighted-word ()
+      "Custom function to spell check next highlighted word"
+      (interactive)
+      (flyspell-goto-next-error)
+      (ispell-word)
+      )
+    (global-set-key (kbd "M-<f8>") 'flyspell-check-next-highlighted-word)
+  #+END_SRC
+
+- F11 launches Ebib
+  #+BEGIN_SRC emacs-lisp
+  (global-set-key [f11] 'ebib)
+  #+END_SRC
+
+- F12 launches Mu4e / S-F12 compose new message
+  #+BEGIN_SRC emacs-lisp
+    (global-set-key [f12] 'mu4e)
+    (global-set-key [S-f12] 'mu4e-compose-new)
+  #+END_SRC
+
+* Org-mode
+** Agenda
+- Agende files
+  #+BEGIN_SRC emacs-lisp
+    (setq org-agenda-files (quote ("~/Documents/Org"
+                                   "~/Documents/Org/cal")))
+  #+END_SRC
+
+** Refile
+- Basic conf
+  #+BEGIN_SRC emacs-lisp
+    ; Targets include this file and any file contributing to the agenda - up to 9 levels deep
+    (setq org-refile-targets (quote ((nil :maxlevel . 9)
+                                     (org-agenda-files :maxlevel . 9))))
+    
+    ; Use full outline paths for refile targets - we file directly with IDO
+    (setq org-refile-use-outline-path t)
+    
+    ; Targets complete directly with IDO
+    (setq org-outline-path-complete-in-steps nil)
+    
+    ; Allow refile to create parent tasks with confirmation
+    (setq org-refile-allow-creating-parent-nodes (quote confirm))
+  #+END_SRC
+
+** Conflicts
+- Windmove
+  #+begin_src emacs-lisp
+    (add-hook 'org-shiftup-final-hook 'windmove-up)
+    (add-hook 'org-shiftleft-final-hook 'windmove-left)
+    (add-hook 'org-shiftdown-final-hook 'windmove-down)
+    (add-hook 'org-shiftright-final-hook 'windmove-right)
+  #+end_src
+
+** Org-babel config
+- Fontify in babel
+  #+begin_src emacs_lisp
+    (setq org-src-fontify-natively t)
+  #+end_src
+
+** Org-capture
+- Templates for capturing a link
+  #+BEGIN_SRC emacs-lisp
+    (require 'org-protocol)
+    (setq org-protocol-default-template-key "l")
+    (setq org-capture-templates
+          '(("l" "Link" entry 
+            (file+headline "~/Dropbox/Org/links.org" "Links to Read")
+            "* %a\n %?\n %i")))
+  #+END_SRC
+
+** Org-caldav
+- Setup
+  #+BEGIN_SRC emacs-lisp
+    (setq org-caldav-url "https://my.owndrive.com/remote.php/caldav/calendars/svaiter")
+    (setq org-caldav-calendars
+      '((:calendar-id "pro" :files ("~/Documents/Org/thesis.org")
+                      :inbox "~/Documents/Org/cal/inbox-work.org")
+        (:calendar-id "perso" :files ("~/Documents/Org/life.org")
+                      :inbox "~/Documents/Org/cal/inbox-life.org")))
+    (setq org-caldav-save-directory "~/Documents/Org/cal")
+    (setq org-icalendar-timezone "Europe/Paris")
+  #+END_SRC
+
+  
